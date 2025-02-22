@@ -9,6 +9,24 @@ def sanitize_filename(filename):
     # Remove invalid characters and replace spaces with underscores
     return re.sub(r'[<>:"/\\|?*]', '', filename).replace(' ', '_')
 
+
+# Custom exceptions
+class YoutubeDownloaderError(Exception):
+    """Base exception class for YouTube downloader errors"""
+    pass
+
+class InvalidChannelError(YoutubeDownloaderError):
+    """Raised when the channel URL/name is invalid"""
+    pass
+
+class NoVideosFoundError(YoutubeDownloaderError):
+    """Raised when no videos are found"""
+    pass
+
+class DownloadError(YoutubeDownloaderError):
+    """Raised when video download fails"""
+    pass
+
 def get_channel_name(channel_url):
     """Get channel name for folder creation."""
     ydl_opts = {
@@ -25,8 +43,10 @@ def get_channel_name(channel_url):
                 return sanitize_filename(channel_name)
     except Exception as e:
         print(f"Warning: Couldn't get channel name: {str(e)}")
+        raise InvalidChannelError(f"Invalid channel name")
     
-    return "unknown_channel"
+    # return "unknown_channel"
+    raise InvalidChannelError("Could not get channel name")
 
 def load_downloaded_ids(json_path):
     if os.path.exists(json_path):
@@ -92,38 +112,47 @@ def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=No
         'no_warnings': True,
         'extract_flat': True,
         'format': 'best',
+        'default_search': 'ytsearch'
     }
 
     start_idx = (page - 1) * page_size
-    
-    if channel_info:
-        identifier, type_ = channel_info
-        channel_url = get_channel_url(identifier, type_)
-        search_query = f"{channel_url}/shorts"
-    else:
-        search_query = f"ytsearch{start_idx + page_size}:{query} shorts"
+    try:    
+        if channel_info:
+            identifier, type_ = channel_info
+            # channel_url = get_channel_url(identifier, type_)
+            # search_query = f"{channel_url}/shorts"
+            if type_ == 'unknown':
+                # If channel type is unknown, treat it as a search query
+                search_query = f"ytsearch{start_idx + page_size}:{identifier} shorts"
+            else:
+                channel_url = get_channel_url(identifier, type_)
+                search_query = f"{channel_url}/shorts"
+        else:
+            search_query = f"ytsearch{start_idx + page_size}:{query} shorts"
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # try:
             search_results = ydl.extract_info(search_query, download=False)
             
             if not search_results.get('entries'):
                 return []
             
             entries = search_results['entries']
-            if not channel_info:
+            if not channel_info or type_ == 'unknown':
                 entries = entries[start_idx:]
             else:
                 entries = entries[start_idx:start_idx + page_size]
             
-            if channel_info:
+            if channel_info and type_ != 'unknown':
                 entries = [entry for entry in entries if 'shorts' in entry.get('url', '').lower()]
             
             return [entry['id'] for entry in entries if entry['id'] not in downloaded_ids]
-            
-        except Exception as e:
-            print(f"Error searching videos: {str(e)}")
-            return []
+                
+            # except Exception as e:
+            #     print(f"Error searching videos: {str(e)}")
+            #     return []
+    except Exception as e:
+        raise YoutubeDownloaderError(f"Error searching videos")
 
 def find_unique_videos(query, required_count, downloaded_ids, channel_info=None, max_attempts=10):
     unique_videos = []
@@ -139,10 +168,13 @@ def find_unique_videos(query, required_count, downloaded_ids, channel_info=None,
         print(f"Searching page {page}...")
         new_videos = search_shorts_page(query, page_size, downloaded_ids, page, channel_info)
         
-        if not new_videos:
-            print("No more videos found in search results.")
-            break
+        if not new_videos and page == 1:
+            raise NoVideosFoundError("No videos found matching the search criteria")
+            # print("No more videos found in search results.")
+            # break
             
+        if not new_videos:
+            break
         unique_videos.extend(new_videos)
         unique_videos = list(dict.fromkeys(unique_videos))
         
@@ -163,8 +195,8 @@ def download_combined(video_id, output_path, index, json_path):
         'ignoreerrors': True,
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
             print(f"Downloaded combined video {index}")
             save_downloaded_id(video_id, json_path)
@@ -172,9 +204,10 @@ def download_combined(video_id, output_path, index, json_path):
             relative_path = os.path.relpath(output_path, os.path.join(os.getcwd(), "videos"))
             video_url = f"/videosList/{f'{relative_path}/{index}_{video_id}_combined'}.mp4"  # Assuming mp4 extension, modify based on the actual file type
             return video_url
-        except Exception as e:
-            print(f"Error downloading combined video {index}: {str(e)}")
-            return False
+    except Exception as e:
+        raise DownloadError(f"Error downloading video {index}: {str(e)}")
+        # print(f"Error downloading combined video {index}: {str(e)}")
+        # return False
 
 def download_short_video(video_id, output_path, index):
     url = f"https://www.youtube.com/shorts/{video_id}"
@@ -270,8 +303,9 @@ def startDownload(search_type, params):
         video_ids = find_unique_videos(query, max_results, downloaded_ids, channel_info)
 
         if not video_ids:
-            print("No new videos found!")
-            return
+            raise NoVideosFoundError("No new videos found!")
+            # print("No new videos found!")
+            # return
 
         print(f"\nFound {len(video_ids)} new videos to download")
         
@@ -291,11 +325,18 @@ def startDownload(search_type, params):
             if success:
                 successful_downloads += 1
 
+        if not video_urls:
+            raise DownloadError("Failed to download any videos")
         print(f"\nDownload complete! Successfully downloaded {successful_downloads} new videos")
         print(f"Files are saved in: {download_path}")
         return video_urls
 
+    except YoutubeDownloaderError as e:
+        # Re-raise the custom exceptions to be caught by the API
+        raise
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error: {str(e)} printing exception")
+        raise YoutubeDownloaderError(f"Unexpected error occured!")
+        
 # if __name__ == "__main__":
 #     main()

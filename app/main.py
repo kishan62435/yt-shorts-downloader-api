@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app.api.v1.endpoints import auth, video
 from app.core.logging_config import setup_logging
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError, HTTPException
 from app.core.exception_handlers import validation_exception_handler, general_exception_handler, http_exception_handler
 
@@ -12,6 +13,20 @@ setup_logging()
 
 
 app = FastAPI()
+
+origins = [
+    "http://localhost:3000",  # Allow requests from the frontend (Vue.js)
+    "http://localhost:8000",  # If you're using a different port for the API (adjust as needed)
+    "*",  # Allow all domains (be cautious with this in production)
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Allowed origins (for local development, add frontend URL)
+    allow_credentials=True,  # Allow cookies and credentials in the requests
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
 
 # Register global exception handlers
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
