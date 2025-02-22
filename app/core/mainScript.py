@@ -15,6 +15,7 @@ def get_channel_name(channel_url):
         'quiet': True,
         'no_warnings': True,
         'extract_flat': True,
+	'cookiefile': '/home/ubuntu/.yt-dlp/cookies.txt'
     }
     
     try:
@@ -92,6 +93,7 @@ def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=No
         'no_warnings': True,
         'extract_flat': True,
         'format': 'best',
+	'cookiefile': '/home/ubuntu/.yt-dlp/cookies.txt'
     }
 
     start_idx = (page - 1) * page_size
@@ -161,6 +163,7 @@ def download_combined(video_id, output_path, index, json_path):
         'outtmpl': os.path.join(output_path, f'{index}_{video_id}_combined.%(ext)s'),
         'no_warnings': True,
         'ignoreerrors': True,
+	'cookiefile': '/home/ubuntu/.yt-dlp/cookies.txt'
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -183,6 +186,8 @@ def download_short_video(video_id, output_path, index):
         'outtmpl': os.path.join(output_path, f'{index}.%(ext)s'),
         'no_warnings': True,
         'ignoreerrors': True,
+
+
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
