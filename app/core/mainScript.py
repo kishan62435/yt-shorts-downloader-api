@@ -4,6 +4,7 @@ import yt_dlp
 from urllib.parse import urlparse, parse_qs
 import re
 
+cookies_path = '/home/ubuntu/.yt-dlp/cookies.txt'
 def sanitize_filename(filename):
     """Remove invalid characters from filename."""
     # Remove invalid characters and replace spaces with underscores
@@ -33,6 +34,7 @@ def get_channel_name(channel_url):
         'quiet': True,
         'no_warnings': True,
         'extract_flat': True,
+        'cookiefile': cookies_path,
     }
     
     try:
@@ -112,7 +114,8 @@ def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=No
         'no_warnings': True,
         'extract_flat': True,
         'format': 'best',
-        'default_search': 'ytsearch'
+        'default_search': 'ytsearch',
+        'cookiefile': cookies_path,
     }
 
     start_idx = (page - 1) * page_size
@@ -193,6 +196,7 @@ def download_combined(video_id, output_path, index, json_path):
         'outtmpl': os.path.join(output_path, f'{index}_{video_id}_combined.%(ext)s'),
         'no_warnings': True,
         'ignoreerrors': True,
+        'cookiefile': cookies_path,
     }
 
     try:
@@ -216,6 +220,7 @@ def download_short_video(video_id, output_path, index):
         'outtmpl': os.path.join(output_path, f'{index}.%(ext)s'),
         'no_warnings': True,
         'ignoreerrors': True,
+        'cookiefile': cookies_path,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -240,6 +245,7 @@ def download_short_audio(video_id, output_path, index):
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'm4a',
         }],
+        'cookiefile': cookies_path,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
