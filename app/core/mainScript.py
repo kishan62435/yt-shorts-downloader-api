@@ -147,52 +147,6 @@ def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=No
         except Exception as e:
             print(f"Error searching videos: {str(e)}")
             return []
-# def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=None):
-#     ydl_opts = {
-#         'quiet': True,
-#         'no_warnings': True,
-#         'extract_flat': True,
-#         'format': 'best',
-#     }
-
-#     start_idx = (page - 1) * page_size
-#     try:    
-#         if channel_info:
-#             identifier, type_ = channel_info
-#             # channel_url = get_channel_url(identifier, type_)
-#             # search_query = f"{channel_url}/shorts"
-#             if type_ == 'unknown':
-#                 # If channel type is unknown, treat it as a search query
-#                 search_query = f"ytsearch{start_idx + page_size}:{identifier} shorts"
-#             else:
-#                 channel_url = get_channel_url(identifier, type_)
-#                 search_query = f"{channel_url}/shorts"
-#         else:
-#             search_query = f"ytsearch{start_idx + page_size}:{query} shorts"
-
-#         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-#             # try:
-#             search_results = ydl.extract_info(search_query, download=False)
-            
-#             if not search_results.get('entries'):
-#                 return []
-            
-#             entries = search_results['entries']
-#             if not channel_info or type_ == 'unknown':
-#                 entries = entries[start_idx:]
-#             else:
-#                 entries = entries[start_idx:start_idx + page_size]
-            
-#             if channel_info and type_ != 'unknown':
-#                 entries = [entry for entry in entries if 'shorts' in entry.get('url', '').lower()]
-            
-#             return [entry['id'] for entry in entries if entry['id'] not in downloaded_ids]
-                
-#             # except Exception as e:
-#             #     print(f"Error searching videos: {str(e)}")
-#             #     return []
-#     except Exception as e:
-#         raise YoutubeDownloaderError(f"Error searching videos")
 
 def find_unique_videos(query, required_count, downloaded_ids, channel_info=None, max_attempts=10):
     unique_videos = []
@@ -250,60 +204,8 @@ def download_combined(video_id, output_path, index, json_path):
         # print(f"Error downloading combined video {index}: {str(e)}")
         # return False
 
-def download_short_video(video_id, output_path, index):
-    url = f"https://www.youtube.com/shorts/{video_id}"
-    ydl_opts = {
-        'format': 'bestvideo[ext=mp4]',
-        'outtmpl': os.path.join(output_path, f'{index}.%(ext)s'),
-        'no_warnings': True,
-        'ignoreerrors': True,
-        
-    }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            ydl.download([url])
-            print(f"Downloaded video: {index}.mp4")
-            # return True
-            video_url = f"/videosList/{index}.mp4"  # Assuming mp4 extension, modify based on the actual file type
-            return video_url
-        except Exception as e:
-            print(f"Error downloading video {index}: {str(e)}")
-            return False
 
-def download_short_audio(video_id, output_path, index):
-    url = f"https://www.youtube.com/shorts/{video_id}"
-    ydl_opts = {
-        'format': 'bestaudio[ext=m4a]',
-        'outtmpl': os.path.join(output_path, f'{index}_audio.%(ext)s'),
-        'no_warnings': True,
-        'ignoreerrors': True,
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'm4a',
-        }],
-        
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            ydl.download([url])
-            print(f"Downloaded audio: {index}_audio.m4a")
-            # return True
-            video_url = f"/videosList/{index}_audio.mp4"  # Assuming mp4 extension, modify based on the actual file type
-            return video_url
-        except Exception as e:
-            print(f"Error downloading audio {index}: {str(e)}")
-            return False
-
-def download_separate(video_id, output_path, index, json_path):
-    video_success = download_short_video(video_id, output_path, index)
-    audio_success = download_short_audio(video_id, output_path, index)
-    
-    if video_success and audio_success:
-        save_downloaded_id(video_id, json_path)
-        return True
-    return False
 
 
 def startDownload(search_type, params):
@@ -362,8 +264,6 @@ def startDownload(search_type, params):
                 success = download_combined(video_id, download_path, index, json_path)
                 if success:
                     video_urls.append(success)
-            else:
-                success = download_separate(video_id, download_path, index, json_path)
                 
             if success:
                 successful_downloads += 1
