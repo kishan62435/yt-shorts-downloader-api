@@ -124,13 +124,7 @@ def setup_download_directory(base_path, channel_info=None):
     return download_path, json_path
 
 
-def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=None, cookies_path=None):
-    # ydl_opts = {
-    #     'quiet': True,
-    #     'no_warnings': True,
-    #     'extract_flat': True,
-    #     'format': 'best',
-    # }
+def search_shorts_page_old(query, page_size, downloaded_ids, page=1, channel_info=None, cookies_path=None):
     ydl_opts = get_yt_dlp_opts(cookies_path)
     ydl_opts.update({
         'format': 'best',
@@ -167,7 +161,87 @@ def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=No
             print(f"Error searching videos: {str(e)}")
             return []
 
-def find_unique_videos(query, required_count, downloaded_ids, channel_info=None, max_attempts=10):
+
+def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=None, cookies_path=None):
+    ydl_opts = get_yt_dlp_opts(cookies_path)
+    ydl_opts.update({
+        'format': 'best',
+        'extract_flat': True,
+    })
+    start_idx = (page - 1) * page_size
+   
+    if channel_info:
+        identifier, type_ = channel_info
+        channel_url = get_channel_url(identifier, type_)
+        search_query = f"{channel_url}/shorts"
+    else:
+        search_query = f"ytsearch{start_idx + page_size}:{query} shorts"
+    
+    print(f"Using search query: {search_query}")
+    
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        try:
+            search_results = ydl.extract_info(search_query, download=False)
+           
+            if not search_results.get('entries'):
+                return []
+           
+            entries = search_results['entries']
+            
+            # For debugging
+            print(f"Found {len(entries)} entries before filtering")
+            
+            if not channel_info:
+                entries = entries[start_idx:]
+            else:
+                entries = entries[start_idx:start_idx + page_size]
+           
+            # Filter for shorts and not downloaded
+            filtered_entries = []
+            for entry in entries:
+                if not isinstance(entry, dict) or 'id' not in entry:
+                    continue
+                    
+                video_id = entry['id']
+                
+                if video_id in downloaded_ids:
+                    continue
+                    
+                if channel_info:
+                    url = entry.get('url', '')
+                    if not isinstance(url, str) or 'shorts' not in url.lower():
+                        continue
+                
+                # Get view count
+                view_count = int(entry.get('view_count', 0))
+                
+                filtered_entries.append({
+                    'id': video_id,
+                    'view_count': view_count
+                })
+            
+            # Sort by view count if this is a channel search
+            if channel_info:
+                filtered_entries.sort(key=lambda x: x['view_count'], reverse=True)
+                print(f"Sorted {len(filtered_entries)} videos by view count")
+                
+                # Log the top 5 videos to verify sorting
+                if filtered_entries:
+                    print("Top videos by view count:")
+                    for i, entry in enumerate(filtered_entries[:5]):
+                        print(f"  {i+1}. ID: {entry['id']}, Views: {entry['view_count']}")
+            
+            # Return just the IDs
+            return [entry['id'] for entry in filtered_entries]
+           
+        except Exception as e:
+            import traceback
+            print(f"Error searching videos: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
+            return []
+
+
+def find_unique_videos_old(query, required_count, downloaded_ids, channel_info=None, max_attempts=10):
     unique_videos = []
     page = 1
     page_size = 50
@@ -197,17 +271,43 @@ def find_unique_videos(query, required_count, downloaded_ids, channel_info=None,
         
     return unique_videos[:required_count]
 
+
+def find_unique_videos(query, required_count, downloaded_ids, channel_info=None, max_attempts=10):
+    unique_videos = []
+    page = 1
+    page_size = 50
+    attempts = 0
+    print("Searching for videos...")
+    search_type = "channel" if channel_info else "query"
+    print(f"Search type: {search_type}")
+   
+    while len(unique_videos) < required_count and attempts < max_attempts:
+        print(f"Searching page {page}...")
+        new_videos = search_shorts_page(query, page_size, downloaded_ids, page, channel_info)
+       
+        if not new_videos and page == 1:
+            raise NoVideosFoundError("No videos found matching the search criteria")
+           
+        if not new_videos:
+            break
+
+
+        # unique_videos.extend(new_videos)
+        if new_videos and all(isinstance(vid, str) for vid in new_videos):
+            unique_videos.extend(new_videos)
+            unique_videos = list(dict.fromkeys(unique_videos)) 
+        else:
+             print(f"Warning: Unexpected video format in results: {type(new_videos[0]) if new_videos else 'empty'}")
+        
+       
+        print(f"Found {len(unique_videos)}/{required_count} unique videos")
+        page += 1
+        attempts += 1
+    
+    return unique_videos[:required_count]
 # [Previous download functions remain the same]
 def download_combined(video_id, output_path, index, json_path, cookies_path=None):
     url = f"https://www.youtube.com/shorts/{video_id}"
-    # ydl_opts = {
-    #     'format': 'best',
-    #     # 'outtmpl': os.path.join(output_path, f'{index}_combined.%(ext)s'),
-    #     'outtmpl': os.path.join(output_path, f'{index}_{video_id}_combined.%(ext)s'),
-    #     'no_warnings': True,
-    #     'ignoreerrors': True,
-        
-    # }
     # 'format': 'bv*[height<=1080]+ba/best',
     ydl_opts = {
         'format':'best',
