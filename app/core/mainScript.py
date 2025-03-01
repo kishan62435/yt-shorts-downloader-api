@@ -4,7 +4,22 @@ import yt_dlp
 from urllib.parse import urlparse, parse_qs
 import re
 
-cookies_path = '/home/ubuntu/.yt-dlp/cookies.txt'
+# Update the cookies path to be configurable
+DEFAULT_COOKIES_PATH = '/home/ubuntu/.yt-dlp/cookies.txt'
+
+def get_yt_dlp_opts(cookies_path=None):
+    """Get base yt-dlp options with cookie support."""
+    opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': True,
+    }
+    
+    if cookies_path and os.path.exists(cookies_path):
+        opts['cookiefile'] = cookies_path
+    
+    return opts
+
 def sanitize_filename(filename):
     """Remove invalid characters from filename."""
     # Remove invalid characters and replace spaces with underscores
@@ -28,15 +43,15 @@ class DownloadError(YoutubeDownloaderError):
     """Raised when video download fails"""
     pass
 
-def get_channel_name(channel_url):
+def get_channel_name(channel_url, cookies_path=None):
     """Get channel name for folder creation."""
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': True,
+    # ydl_opts = {
+    #     'quiet': True,
+    #     'no_warnings': True,
+    #     'extract_flat': True,
         
-    }
-    
+    # }
+    ydl_opts = get_yt_dlp_opts(cookies_path)
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(channel_url, download=False)
@@ -109,13 +124,17 @@ def setup_download_directory(base_path, channel_info=None):
     return download_path, json_path
 
 
-def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=None):
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': True,
+def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=None, cookies_path=None):
+    # ydl_opts = {
+    #     'quiet': True,
+    #     'no_warnings': True,
+    #     'extract_flat': True,
+    #     'format': 'best',
+    # }
+    ydl_opts = get_yt_dlp_opts(cookies_path)
+    ydl_opts.update({
         'format': 'best',
-    }
+    })
 
     start_idx = (page - 1) * page_size
     
@@ -179,31 +198,48 @@ def find_unique_videos(query, required_count, downloaded_ids, channel_info=None,
     return unique_videos[:required_count]
 
 # [Previous download functions remain the same]
-def download_combined(video_id, output_path, index, json_path):
+def download_combined(video_id, output_path, index, json_path, cookies_path=None):
     url = f"https://www.youtube.com/shorts/{video_id}"
+    # ydl_opts = {
+    #     'format': 'best',
+    #     # 'outtmpl': os.path.join(output_path, f'{index}_combined.%(ext)s'),
+    #     'outtmpl': os.path.join(output_path, f'{index}_{video_id}_combined.%(ext)s'),
+    #     'no_warnings': True,
+    #     'ignoreerrors': True,
+        
+    # }
+    # 'format': 'bv*[height<=1080]+ba/best',
     ydl_opts = {
-        'format': 'best',
-        # 'outtmpl': os.path.join(output_path, f'{index}_combined.%(ext)s'),
+        'format':'best',
         'outtmpl': os.path.join(output_path, f'{index}_{video_id}_combined.%(ext)s'),
         'no_warnings': True,
         'ignoreerrors': True,
-        
     }
+
+     # Add cookies if available
+    if cookies_path and os.path.exists(cookies_path):
+        ydl_opts['cookiefile'] = cookies_path
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
-            print(f"Downloaded combined video {index}")
-            save_downloaded_id(video_id, json_path)
-            # return True
-            relative_path = os.path.relpath(output_path, os.path.join(os.getcwd(), "videos"))
-            video_url = f"/videosList/{f'{relative_path}/{index}_{video_id}_combined'}.mp4"  # Assuming mp4 extension, modify based on the actual file type
-            return video_url
-    except Exception as e:
-        raise DownloadError(f"Error downloading video {index}: {str(e)}")
-        # print(f"Error downloading combined video {index}: {str(e)}")
-        # return False
 
+    except Exception as e:
+        # If it's not a cookie permission error, raise it
+        if not ("Permission denied" in str(e) and "cookies.txt" in str(e)):
+            raise DownloadError(f"Error downloading video {index}: {str(e)}")
+        
+
+    expected_file = os.path.join(output_path, f'{index}_{video_id}_combined.mp4')
+    if os.path.exists(expected_file):
+
+        print(f"Downloaded combined video {index}")
+        save_downloaded_id(video_id, json_path)
+        relative_path = os.path.relpath(output_path, os.path.join(os.getcwd(), "videos"))
+        video_url = f"/videosList/{f'{relative_path}/{index}_{video_id}_combined'}.mp4"  # Assuming mp4 extension, modify based on the actual file type
+        return video_url
+    
+    raise DownloadError(f"Video file not found after download")
 
 
 
@@ -214,7 +250,7 @@ def startDownload(search_type, params):
         # return
         # search_type = input("Enter search type (1 for keyword search, 2 for channel search): ")
 
-        
+        cookies_path = params.get('cookies_path', DEFAULT_COOKIES_PATH)
         
         channel_info = None
         query = ""
@@ -258,16 +294,20 @@ def startDownload(search_type, params):
         video_urls = [] 
         for index, video_id in enumerate(video_ids, start=1):
             print(f"\nDownloading video {index}/{len(video_ids)}...")
-            success = False
+            try:
+                success = False
             
-            if download_mode == "1":
-                success = download_combined(video_id, download_path, index, json_path)
-                if success:
-                    video_urls.append(success)
+                if download_mode == "1":
+                    success = download_combined(video_id, download_path, index, json_path, cookies_path)
+                    if success:
+                        video_urls.append(success)
                 
-            if success:
-                successful_downloads += 1
-
+                if success:
+                    successful_downloads += 1
+            except Exception as e:
+                if "Permission denied" in str(e) and "cookies.txt" in str(e) and video_urls:
+                    continue
+                raise
         if not video_urls:
             raise DownloadError("Failed to download any videos")
         print(f"\nDownload complete! Successfully downloaded {successful_downloads} new videos")
@@ -279,6 +319,8 @@ def startDownload(search_type, params):
         raise
     except Exception as e:
         print(f"Error: {str(e)} printing exception")
+        if "Permission denied" in str(e) and "cookies.txt" in str(e):
+            return video_urls
         raise YoutubeDownloaderError(f"Unexpected error occured!")
         
 # if __name__ == "__main__":

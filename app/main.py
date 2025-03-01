@@ -17,6 +17,7 @@ app = FastAPI()
 origins = [
     "http://localhost:3000",  # Allow requests from the frontend (Vue.js)
     "http://localhost:8000",  # If you're using a different port for the API (adjust as needed)
+    "http://localhost:80"
     "*",  # Allow all domains (be cautious with this in production)
 ]
 
