@@ -4,56 +4,7 @@ import yt_dlp
 from urllib.parse import urlparse, parse_qs
 import re
 
-# Update the cookies path to be configurable
-DEFAULT_COOKIES_PATH = '/home/ubuntu/.yt-dlp/cookies.txt'
-
-
-def get_yt_dlp_opts2(cookies_path=None):
-    """Get base yt-dlp options with enhanced download capabilities."""
-    opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'ignore_errors': True,  # Continue downloading if one video fails
-        'no_color': True,
-        'no_part': True,  # Disable .part file
-        'retries': 3,  # Number of download retries
-        'fragment_retries': 3,  # Number of fragment retries
-        'extractor_retries': 3,  # Number of extractor retries
-        'timeout': 30,  # Connection timeout
-        
-        # More flexible format selection
-        'format': 'best[ext=mp4]/best/bestvideo+bestaudio/best',
-        
-        # Additional format selection strategies
-        'youtube_include_dash_manifest': True,
-        'youtube_skip_dash_manifest': False,
-        
-        # Bypass age restrictions if possible
-        'age_limit': 0,
-        
-        # Additional error handling
-        'ignoreerrors': 'no_download',  # Skip videos that can't be downloaded
-    }
-    
-    # Add cookie support if path is provided
-    if cookies_path and os.path.exists(cookies_path):
-        opts['cookiefile'] = cookies_path
-    
-    return opts
-def get_yt_dlp_opts(cookies_path=None):
-    """Get base yt-dlp options with cookie support."""
-    opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': True,
-        'sleep_interval': 2,
-    }
-    
-    if cookies_path and os.path.exists(cookies_path):
-        opts['cookiefile'] = cookies_path
-    
-    return opts
-
+cookies_path = '/home/ubuntu/.yt-dlp/cookies.txt'
 def sanitize_filename(filename):
     """Remove invalid characters from filename."""
     # Remove invalid characters and replace spaces with underscores
@@ -77,15 +28,15 @@ class DownloadError(YoutubeDownloaderError):
     """Raised when video download fails"""
     pass
 
-def get_channel_name(channel_url, cookies_path=None):
+def get_channel_name(channel_url):
     """Get channel name for folder creation."""
-    # ydl_opts = {
-    #     'quiet': True,
-    #     'no_warnings': True,
-    #     'extract_flat': True,
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': True,
         
-    # }
-    ydl_opts = get_yt_dlp_opts(cookies_path)
+    }
+    
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(channel_url, download=False)
@@ -143,41 +94,28 @@ def get_channel_url(identifier, type_):
 
 def setup_download_directory(base_path, channel_info=None):
     """Setup download directory and return paths."""
-    print("json path")
     json_path = os.path.join(os.path.dirname(__file__), 'downloadedVideoIds.json')
-    print("got json path")
     if not channel_info:
         download_path = base_path
         # json_path = os.path.join(base_path, 'downloadedVideoIds.json')
     else:
-        print("channel info")
         identifier, type_ = channel_info
-        print("identifier and type")
         channel_url = get_channel_url(identifier, type_)
-        print("got channel url")
         channel_name = get_channel_name(channel_url)
-        print("got channel name")
         download_path = os.path.join(base_path, channel_name)
-        print("got download path")
         # json_path = os.path.join(download_path, 'downloadedVideoIds.json')
     
-    print("created download path")
     os.makedirs(download_path, exist_ok=True)
-    print("created download path returing")
     return download_path, json_path
 
 
-def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=None, cookies_path=None):
-    # ydl_opts = {
-    #     'quiet': True,
-    #     'no_warnings': True,
-    #     'extract_flat': True,
-    #     'format': 'best',
-    # }
-    ydl_opts = get_yt_dlp_opts(cookies_path)
-    ydl_opts.update({
+def search_shorts_page(query, page_size, downloaded_ids, page=1, channel_info=None):
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': True,
         'format': 'best',
-    })
+    }
 
     start_idx = (page - 1) * page_size
     
@@ -241,45 +179,31 @@ def find_unique_videos(query, required_count, downloaded_ids, channel_info=None,
     return unique_videos[:required_count]
 
 # [Previous download functions remain the same]
-def download_combined(video_id, output_path, index, json_path, cookies_path=None):
+def download_combined(video_id, output_path, index, json_path):
     url = f"https://www.youtube.com/shorts/{video_id}"
-
-    # 'format': 'bv*[height<=1080]+ba/best',
     ydl_opts = {
-        # 'format':'best',
-        'format': 'best[ext=mp4]/best/mp4',
+        'format': 'best',
+        # 'outtmpl': os.path.join(output_path, f'{index}_combined.%(ext)s'),
         'outtmpl': os.path.join(output_path, f'{index}_{video_id}_combined.%(ext)s'),
         'no_warnings': True,
         'ignoreerrors': True,
-        'nooverwrites': True,
-        'no_color': True,
+        
     }
 
-     # Add cookies if available
-    if cookies_path and os.path.exists(cookies_path):
-        ydl_opts['cookiefile'] = cookies_path
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
-
-    except yt_dlp.utils.DownloadError as e:
-            raise DownloadError(f"Download error for video {index}: {str(e)}")
+            print(f"Downloaded combined video {index}")
+            save_downloaded_id(video_id, json_path)
+            # return True
+            relative_path = os.path.relpath(output_path, os.path.join(os.getcwd(), "videos"))
+            video_url = f"/videosList/{f'{relative_path}/{index}_{video_id}_combined'}.mp4"  # Assuming mp4 extension, modify based on the actual file type
+            return video_url
     except Exception as e:
-        # If it's not a cookie permission error, raise it
-        if not ("Permission denied" in str(e) and "cookies.txt" in str(e)):
-            raise DownloadError(f"Error downloading video {index}: {str(e)}")
-        
+        raise DownloadError(f"Error downloading video {index}: {str(e)}")
+        # print(f"Error downloading combined video {index}: {str(e)}")
+        # return False
 
-    expected_file = os.path.join(output_path, f'{index}_{video_id}_combined.mp4')
-    if os.path.exists(expected_file):
-
-        print(f"Downloaded combined video {index}")
-        save_downloaded_id(video_id, json_path)
-        relative_path = os.path.relpath(output_path, os.path.join(os.getcwd(), "videos"))
-        video_url = f"/videosList/{f'{relative_path}/{index}_{video_id}_combined'}.mp4"  # Assuming mp4 extension, modify based on the actual file type
-        return video_url
-    
-    raise DownloadError(f"Video file not found after download")
 
 
 
@@ -290,7 +214,7 @@ def startDownload(search_type, params):
         # return
         # search_type = input("Enter search type (1 for keyword search, 2 for channel search): ")
 
-        cookies_path = params.get('cookies_path', DEFAULT_COOKIES_PATH)
+        
         
         channel_info = None
         query = ""
@@ -307,20 +231,15 @@ def startDownload(search_type, params):
             query = params["query"]
         
         # max_results = int(input("Enter the number of Shorts to download: "))
-        print("max results")
         max_results = params["max_results"]
         # base_path = os.getcwd()
-        print("base path")
         base_path = os.path.join(os.getcwd(), "videos")
-        print("base path donw")
         # base_path = input("Enter the output directory path: ")
         # download_mode = input("Enter download mode (1 for combined, 2 for separate audio/video): ")
         download_mode = "1"
 
         # Setup directory structure and get paths
-        print("setup download directory")
         download_path, json_path = setup_download_directory(base_path, channel_info)
-        print("setup download directory done")
         print(f"Downloads will be saved to: {download_path}")
         
         downloaded_ids = load_downloaded_ids(json_path)
@@ -339,20 +258,16 @@ def startDownload(search_type, params):
         video_urls = [] 
         for index, video_id in enumerate(video_ids, start=1):
             print(f"\nDownloading video {index}/{len(video_ids)}...")
-            try:
-                success = False
+            success = False
             
-                if download_mode == "1":
-                    success = download_combined(video_id, download_path, index, json_path, cookies_path)
-                    if success:
-                        video_urls.append(success)
-                
+            if download_mode == "1":
+                success = download_combined(video_id, download_path, index, json_path)
                 if success:
-                    successful_downloads += 1
-            except Exception as e:
-                if "Permission denied" in str(e) and "cookies.txt" in str(e) and video_urls:
-                    continue
-                raise
+                    video_urls.append(success)
+                
+            if success:
+                successful_downloads += 1
+
         if not video_urls:
             raise DownloadError("Failed to download any videos")
         print(f"\nDownload complete! Successfully downloaded {successful_downloads} new videos")
@@ -364,8 +279,6 @@ def startDownload(search_type, params):
         raise
     except Exception as e:
         print(f"Error: {str(e)} printing exception")
-        if "Permission denied" in str(e) and "cookies.txt" in str(e):
-            return video_urls
         raise YoutubeDownloaderError(f"Unexpected error occured!")
         
 # if __name__ == "__main__":
