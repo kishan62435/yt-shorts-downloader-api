@@ -18,7 +18,7 @@ This project does not use the official YouTube Data API. It relies on `yt-dlp` t
 
 ### Repository layout
 ```text
-projectY/
+yt-shorts-downloader-api/
   app/
     api/v1/
       endpoints/
@@ -48,7 +48,7 @@ projectY/
 
 ### Install
 ```bash
-cd projectY
+cd yt-shorts-downloader-api
 python -m venv .venv
 # Windows PowerShell
 .\.venv\Scripts\Activate.ps1
@@ -60,7 +60,7 @@ pip install -r requirements.txt
 ```
 
 ### Environment variables
-Create `projectY/.env` with:
+Create `yt-shorts-downloader-api/.env` with:
 ```env
 # JWT
 SECRET_KEY=replace_with_a_long_random_string
@@ -78,7 +78,7 @@ Notes:
 
 ### Run the API
 ```bash
-cd projectY
+cd yt-shorts-downloader-api
 python run.py
 # Serves on http://0.0.0.0:8001
 ```
@@ -86,7 +86,7 @@ python run.py
 Interactive docs: `http://localhost:8001/docs`
 
 ### How downloads are stored and served
-- Files are saved under `projectY/videos/`.
+- Files are saved under `yt-shorts-downloader-api/videos/`.
 - The folder is mounted at the route prefix `/videosList`.
 - Example static URL (after a successful download):
   - `http://localhost:8001/videosList/<Channel_or_Base>/<index>_<videoId>_combined.mp4`
@@ -180,7 +180,7 @@ Default `origins` in `app/main.py` include `http://localhost:3000` and `*` (allo
 ### Troubleshooting
 - Ensure `yt-dlp` is up-to-date (already pinned in `requirements.txt`).
 - If some Shorts require login, place a valid `cookies.txt` and update `DEFAULT_COOKIES_PATH` in `app/core/mainScript.py` for your OS.
-- If you run the app from a different working directory, the `videos/` mount path in `app/main.py` uses `os.getcwd()`; run from `projectY/` so static URLs work as documented.
+- If you run the app from a different working directory, the `videos/` mount path in `app/main.py` uses `os.getcwd()`; run from `yt-shorts-downloader-api/` so static URLs work as documented.
 - Because this does not use the official YouTube Data API, occasional breakage can occur due to site changes; update `yt-dlp` and retry.
 
 ### Limitations and roadmap
