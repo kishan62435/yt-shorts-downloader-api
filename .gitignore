@@ -75,3 +75,4 @@ Dockerfile
 local_settings.py
 
 videos/
+.pem
